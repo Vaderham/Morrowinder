@@ -64,11 +64,11 @@ var refs = new List<string>()
 
 dynamic items = JsonConvert.DeserializeObject(json);
 
+var newList = fileOne(items, refs);
+
 Console.Write("BCOM contains " + items.length + " items");
 
-
-
-// JsonFileUtils.SimpleWrite(JsonConvert.SerializeObject(newList), "newFile.json");
+JsonFileUtils.SimpleWrite(JsonConvert.SerializeObject(newList), "newFile.json");
 
 static List<dynamic> fileOne(dynamic parsedJSON, List<string> refs)
 {
@@ -96,12 +96,21 @@ static List<dynamic> fileOne(dynamic parsedJSON, List<string> refs)
                 continue;
             }
         }
-    
-        // If it's ID is in the refs list, don't keep it.
-        if (espType.references.)
+
+        // Otherwise, go through the cells references, and if any id's are in our refs list, remove them.
+        List<dynamic> references = new List<dynamic>();
+
+        foreach (var reference in espType.references)
         {
-            newList.Add(espType);
+            if (!refs.Contains(reference.id.ToString()))
+            {
+                references.Add(reference);
+            }
         }
+
+        espType.references = references;
+        
+        newList.Add(espType);
     }
 
     return newList;
