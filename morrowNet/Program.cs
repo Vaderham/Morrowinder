@@ -24,8 +24,10 @@
 
 
 using System.Collections;
+using System.Diagnostics;
 using morrowNet;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using var r = new StreamReader("C:/bcom.json");
 string json = r.ReadToEnd();
@@ -64,17 +66,15 @@ var refs = new List<string>()
 
 dynamic items = JsonConvert.DeserializeObject(json);
 
-var newList = fileOne(items, refs);
+var newList = FileTwo(items, refs);
 
-Console.Write("BCOM contains " + items.length + " items");
+JsonFileUtils.SimpleWrite(JsonConvert.SerializeObject(newList), "attempt3.json");
 
-JsonFileUtils.SimpleWrite(JsonConvert.SerializeObject(newList), "newFile.json");
-
-static List<dynamic> fileOne(dynamic parsedJSON, List<string> refs)
+static List<dynamic> FileOne(dynamic parsedJson, List<string> refs)
 {
     var newList = new List<dynamic>();
     
-    foreach (var espType in parsedJSON)
+    foreach (var espType in parsedJson)
     {
         // If it's not a cell type, keep it.
         if (espType.type.ToString() != string.Empty && espType.type.ToString() != "Cell")
@@ -98,7 +98,7 @@ static List<dynamic> fileOne(dynamic parsedJSON, List<string> refs)
         }
 
         // Otherwise, go through the cells references, and if any id's are in our refs list, remove them.
-        List<dynamic> references = new List<dynamic>();
+        var references = new List<dynamic>();
 
         foreach (var reference in espType.references)
         {
@@ -108,7 +108,8 @@ static List<dynamic> fileOne(dynamic parsedJSON, List<string> refs)
             }
         }
 
-        espType.references = references;
+        JArray json = JArray.FromObject(references);
+        espType.references = json;
         
         newList.Add(espType);
     }
@@ -116,30 +117,52 @@ static List<dynamic> fileOne(dynamic parsedJSON, List<string> refs)
     return newList;
 }
 
-static List<dynamic> fileTwo(dynamic parsedJSON, List<string> refs)
+static List<dynamic> FileTwo(dynamic parsedJson, List<string> refs)
 {
     var newList = new List<dynamic>();
 
-    foreach (var obj in parsedJSON)
+    foreach (var espType in parsedJson)
     {
         // If it's the header, keep it
-        if (obj.tpye != null && obj.type.ToString() == "Header")
+        if (espType.type.ToString() != string.Empty && espType.type.ToString() == "Header")
         {
-            newList.Add(obj);
+            newList.Add(espType);
             continue;
         }
     
-        // If it's static and contains ID's keep it
-        if (obj.tpye != null && (obj.type.ToString() == "Static" && refs.Contains(obj.id)))
+        // If it's static and it's ID is in references list, keep it
+        // Update it's path to have grass folder as parent
+        if (espType.type.ToString() != string.Empty && espType.type.ToString() == "Static")
         {
-            newList.Add(obj);
-            continue;
+            if (refs.Contains(espType.id.ToString()))
+            {
+                string[] splitPath = espType.mesh.ToString().Split("\\");
+                espType.mesh = "grass\\\\" + splitPath[1];
+                
+                Console.WriteLine(espType.mesh);
+
+                newList.Add(espType);
+                continue;
+            }
         }
     
-        // If it's a cell ref, and contains Id from refs, keep it
-        if (obj.tpye != null && (obj.type.ToString() == "Cell" && refs.Contains(obj.id)))
+        // If it's a cell ref, and references array contains Id from refs, keep those references and cell.
+        if (espType.type != null && espType.type.ToString() == "Cell")
         {
-            newList.Add(obj);
+            var references = new List<dynamic>();
+            
+            foreach (var reference in espType.references)
+            {
+                if (refs.Contains(reference.id.ToString()))
+                {
+                    references.Add(reference);
+                }
+            }
+            
+            JArray referencesArray = JArray.FromObject(references);
+            espType.references = referencesArray;
+            
+            newList.Add(espType);
         }
     }
 
