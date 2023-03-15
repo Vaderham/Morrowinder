@@ -36,8 +36,8 @@ var refs = new List<string>()
 {
     "flora_ash_grass_b_01",
     "bcom_MM_flora_ash_grass_b_01",
-    "flora_ash_grass_r_01",
-    "bcom_MM_flora_ash_grass_r_01",
+    "Flora_Ash_Grass_R_01",
+    "bcom_MM_Flora_Ash_Grass_R_01",
     "flora_ash_grass_w_01",
     "bcom_MM_flora_ash_grass_w_01",
     "flora_bc_fern_02",
@@ -54,21 +54,25 @@ var refs = new List<string>()
     "flora_grass_03",
     "flora_grass_04",
     "flora_grass_05",
-    "flora_grass_06",
-    "flora_grass_07",
-    "flora_kelp_01",
-    "flora_kelp_02",
-    "flora_kelp_03",
-    "flora_kelp_04",
+    "Flora_grass_06",
+    "Flora_grass_07",
+    "Flora_kelp_01",
+    "Flora_kelp_02",
+    "Flora_kelp_03",
+    "Flora_kelp_04",
     "in_cave_plant00",
     "in_cave_plant10"
 };
 
 dynamic items = JsonConvert.DeserializeObject(json);
 
-var newList = FileTwo(items, refs);
+var newList1 = FileOne(items, refs);
 
-JsonFileUtils.SimpleWrite(JsonConvert.SerializeObject(newList), "attempt3.json");
+JsonFileUtils.SimpleWrite(JsonConvert.SerializeObject(newList1), "fileOne.json");
+
+var newList2 = FileTwo(items, refs);
+
+JsonFileUtils.SimpleWrite(JsonConvert.SerializeObject(newList2), "FileTwo.json");
 
 static List<dynamic> FileOne(dynamic parsedJson, List<string> refs)
 {
@@ -108,10 +112,14 @@ static List<dynamic> FileOne(dynamic parsedJson, List<string> refs)
             }
         }
 
-        JArray json = JArray.FromObject(references);
-        espType.references = json;
+        JArray newRefsArray = JArray.FromObject(references);
+        espType.references = newRefsArray;
         
-        newList.Add(espType);
+        // Only add the cell back to the file if it has references remaining.
+        if (newRefsArray.Count > 0)
+        {
+            newList.Add(espType);   
+        }
     }
 
     return newList;
@@ -137,7 +145,7 @@ static List<dynamic> FileTwo(dynamic parsedJson, List<string> refs)
             if (refs.Contains(espType.id.ToString()))
             {
                 string[] splitPath = espType.mesh.ToString().Split("\\");
-                espType.mesh = "grass\\\\" + splitPath[1];
+                espType.mesh = "grass\\" + splitPath[1];
                 
                 Console.WriteLine(espType.mesh);
 
@@ -159,10 +167,33 @@ static List<dynamic> FileTwo(dynamic parsedJson, List<string> refs)
                 }
             }
             
-            JArray referencesArray = JArray.FromObject(references);
-            espType.references = referencesArray;
-            
-            newList.Add(espType);
+            JArray newRefsArray = JArray.FromObject(references);
+            espType.references = newRefsArray;
+
+            // Only add the cell back to the file if it has references remaining.
+            if (newRefsArray.Count > 0)
+            {
+                newList.Add(espType);   
+            }
+        }
+    }
+    
+    // Scan through our refs list and if we don't have a static object for it, add one in
+    var staticItemIds = newList.Where(espType => espType.type.ToString() != string.Empty && espType.type == "Static")
+        .Select(item => item.id)
+        .ToList();
+    
+    foreach (var refString in refs)
+    {
+        if (!staticItemIds.Contains(refString))
+        {
+            newList.Add(new 
+            {
+                type = "Static",
+                flags = new [] { 0, 0 },
+                id = refString,
+                mesh = $"grass\\{refString}.NIF"
+            });
         }
     }
 
