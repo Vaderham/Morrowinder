@@ -9,6 +9,9 @@
 	c) Overwrite Morrowind CELL parent records with BCOM CELL parent records. Name the file 'Cell Name Parent'
 
 
+- -
+  - -
+
 2) Generate GROUNDCOVER file 'hm-grass-bcom-GROUNDCOVER': 
 	a) generate file "Header" as follows:
 
@@ -73,7 +76,9 @@ Compare Vvardenfell Groundcover CELL reference subrecords with BCOM groundcover 
 1b)  if "mast_index" number in BCOM Groundcover cell reference subrecord corresponds to Morrowind.esm, this is a match. Move on to next step
 
 2) if 1b is a match, check if the refr_index in BCOM Groundcover matches a cell reference subrecord in Vvardenfell Groundcover.
-2a) if no identical refr_index number can be found in Vvardenfell Groundcover, throw an error message with the following format: "ERROR: Unable to merge files: CELL reference refr_index [xxx] in [file name (in this case, BCOM Groundcover)] from master file [master file name (in this case, Morrowind.esm)] Groundcover plugin is missing from master file. Process aborted"
+2a) if no identical refr_index number can be found in Vvardenfell Groundcover, throw an error message with the following format: "ERROR: Unable to merge files: 
+    CELL reference refr_index [xxx] in [file name (in this case, BCOM Groundcover)] from master file [master file name (in this case, Morrowind.esm)] Groundcover plugin 
+    is missing from master file. Process aborted"
 2b) if refr_index matches corresponding refr_index in Vvardenfell Groundcover, this is a match. Move on to next step
 
 3) if 1b and 2b are matches, check if CELL reference subrecord in BCOM Groundcover has "moved cell" appended to it
