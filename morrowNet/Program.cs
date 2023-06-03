@@ -1,25 +1,32 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
-// 1. Look through all the objects in the file => Find any Cells references, where data.flags != 5
-// 2. In each cell ref, find any grass or kelp ID's that appear in our refs list
-// 3. If we find any with a matching ID, remove it
-// 4. Somehow, print out the result
+/*
+ * Compare CELL parent records from Vvardenfell Groundcover with BCOM Groundcover (fileTwoV4) CELL parent records:
+• if "grid" coordinates match (e.g. '18, 4'), overwrite the Vvardenfell CELL parent record in its entirety with data from the corresponding BCOM Groundcover CELL parent record (I.e. "id", "data", "flags", "region", "map colour"). 
 
-// step 1: 
-// Update to Beautiful cities of morrowind.json
-// 1. Look through all the objects in the file => Find any Cells references + where data.flags != 5 (don't touch interior cells!)
-// 2. In each cell ref, find any grass or kelp ID's that appear in our refs list
-// 3. If we find any with a matching ID, remove it
-// 4. Somehow, print out the result
-// Convert that back to ESP - Replaces the original BCOM ESP
+Compare Vvardenfell Groundcover CELL reference subrecords with BCOM groundcover CELL reference subrecords:
+1) check mast_index of BCOM Groundcover CELL reference subrecord.
+1a) if "mast_index in BCOM groundcover = 0 (meaning it is a brand new cell reference added by BCOM, not a modification of an existing Morrowind.esm cell reference),
+        insert cell reference subrecord under corresponding CELL parent record in merged file.
+1b)  if "mast_index" number in BCOM Groundcover cell reference subrecord corresponds to Morrowind.esm, this is a match. Move on to next step
 
-// WE then need a basic groudcover ESP. 
-// Create this by taking original BCOM json and deleting everything except for the ones we removed in step 1
-// Keep header, keep all objects of type static that contain id's from refs grass kelp id's list. keep all cell references to the grasses also
-// Update all mesh filepaths in static to grass, eg. "mesh": "grass\\Flora_Ash_Grass_B_01"
+2) if 1b is a match, check if the refr_index in BCOM Groundcover matches a cell reference subrecord in Vvardenfell Groundcover.
+2a) if no identical refr_index number can be found in Vvardenfell Groundcover, throw an error message with the following format: "ERROR: Unable to merge files: 
+    CELL reference refr_index [xxx] in [file name (in this case, BCOM Groundcover)] from master file [master file name (in this case, Morrowind.esm)] Groundcover plugin 
+    is missing from master file. Process aborted"
+2b) if refr_index matches corresponding refr_index in Vvardenfell Groundcover, this is a match. Move on to next step
 
-// new BCOM.json - with all references deleted
-// new groundCover file - stripped back to only include meshes from grass and kelp
+3) if 1b and 2b are matches, check if CELL reference subrecord in BCOM Groundcover has "moved cell" appended to it
+3a) if "moved cell", check what grid coordinates are entered after "moved cell". If grid coordinates match another CELL parent record in Vvardenfell Groundcover, 
+    omit Vvardenfell Groundcover cell reference subrecord matched in steps 1b & 2b from merged file, and insert whole BCOM subrecord as-is to new CELL parent 
+    subrecord in merged file
+3b) if "moved cell" grid coordinates do not match another CELL parent record in Vvardenfell Groundcover, locate corresponding grid coordinates in 'Cell Name Parent' 
+    reference list and insert new CELL parent record. Then, omit Vvardenfell Groundcover cell reference subrecord matched in steps 1b & 2b from merged file, 
+    and move whole BCOM subrecord as-is to new CELL parent subrecord in merged file.
+
+4) if 1b and 2 are matches, and cell reference subrecord does not have "moved cell" appended, check if subrecord has "deleted" appended to it.
+4a) if "deleted", omit whole cell reference subrecord from merged file
+ */
 
 using System.Diagnostics;
 using System.Text.RegularExpressions;
@@ -55,7 +62,6 @@ static IEnumerable<dynamic> ProcessBcomReferenceArrays(IEnumerable<dynamic> BCOM
     Console.WriteLine("Processing reference arrays...");
     
     var mergedCopy = initialMerged.ToList();
-    var vardenfellEntryCount = vardenfell.Count();
     var bcomEntryCount = BCOMGroundCover.Count();
     var bcomCompletedCount = 0;
     
