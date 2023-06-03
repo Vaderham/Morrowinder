@@ -29,124 +29,23 @@ using morrowNet.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-Console.WriteLine("Reading in Vardenfell...");
-var streamReader1 = new StreamReader("C:/vardenfell.json");
-var vardenfellStream = streamReader1.ReadToEnd();
-dynamic vardenfell = JsonConvert.DeserializeObject(vardenfellStream);
+//Read in files
+dynamic vardenfell = JsonFileUtils.ReadInFile("C:/vardenfell.json", "Vardenfell");
+dynamic groundcover = JsonFileUtils.ReadInFile("C:/fileTwoV4.json", "GroundCover");
+dynamic morrowind = JsonFileUtils.ReadInFile("C:/morrowind.json", "Morrowind");
+dynamic bcom = JsonFileUtils.ReadInFile("C:/bcom.json", "BCOM");
 
-Console.WriteLine("Reading in Groundcover...");
-var streamReader2 = new StreamReader("C:/fileTwoV4.json");
-var groundcoverStream = streamReader2.ReadToEnd();
-dynamic groundcover = JsonConvert.DeserializeObject(groundcoverStream);
-
-Console.WriteLine("Reading in morrowind...");
-var streamReader3 = new StreamReader("C:/morrowind.json");
-var morrowindStream = streamReader3.ReadToEnd();
-dynamic morrowind = JsonConvert.DeserializeObject(morrowindStream);
-
-Console.WriteLine("Reading in bcom...");
-var streamReader4 = new StreamReader("C:/morrowind.json");
-var bcomStream = streamReader4.ReadToEnd();
-dynamic bcom = JsonConvert.DeserializeObject(bcomStream);
-
-var initialMergedGroundCover = GenerateInitialMergedGroundCover(vardenfell, groundcover);
+// Generate initial merged groundCover and parent cell list
+var initialMergedGroundCover = MergedGroundCover.GenerateInitialMergedGroundCover(vardenfell, groundcover);
 var parentReference = new ParentCellGenerator().CreateParentCellsList(morrowind, bcom);
 
+// Process reference arrays
 var processedFile = ProcessBcomReferenceArrays(groundcover, vardenfell, initialMergedGroundCover, parentReference);
 
-var fileName = "processedReferenceArrays.json";
-
+// Write to file
+var fileName = "processedFile.json";
 Console.WriteLine($"Writing to file {fileName}");
-
 JsonFileUtils.SimpleWrite(JsonConvert.SerializeObject(processedFile), fileName);
-
-//ProcessBCOMReferenceArrays(groundcover, vardenfell, initialMergedGroundCover);
-
-static IEnumerable<dynamic> GenerateInitialMergedGroundCover(IEnumerable<dynamic> vardenfell, IEnumerable<dynamic> BCOMGroundCover)
-{
-    Console.WriteLine("Generating initial merged file...");
-    
-    var newFile = new List<dynamic>();
-    
-    // Add header
-    newFile.Add(new Header
-    {
-        type = "Header",
-        flags = new []
-        {
-            0, 0
-        },
-        version = 1.0,
-        file_type = "Esp",
-        author = "",
-        description = "BCOM Groundcover file",
-        num_objects = 1,
-        masters = new []
-        {
-            new List<dynamic>
-            {
-                "Morrowind.esm",
-                79837557
-            },
-            new List<dynamic>
-            {
-                "Tribunal.esm",
-                4565686
-            },
-            new List<dynamic>
-            {
-                "Bloodmoon.esm",
-                9631798
-            }
-        }
-    });
-
-    //Add static entries from BCOM
-    
-    //If mesh contains a key from dictionary, replace ID with value from dictionary
-    var BcomGroundCover = BCOMGroundCover.ToList();
-    var staticFiles = BcomGroundCover.Where(entry => entry.type == "Static");
-    foreach (var entry in staticFiles)
-    {
-        var meshString = (string)Convert.ToString(entry.mesh).Replace(@"\", @"\\");
-        var meshLowered = meshString.ToLower();
-        var meshDictionaryId = FloraAndKelpConstants.StaticMeshLowerCaseToId[meshLowered];
-
-        entry.mesh = FloraAndKelpConstants.StaticMeshIdToCapitalisedMesh[meshDictionaryId];
-        entry.id = FloraAndKelpConstants.StaticMeshIdToIdString[meshDictionaryId];
-        
-        newFile.Add(entry);
-    }
-
-    // Add cell records from vardenfell as base
-    foreach (var entry in vardenfell)
-    {
-        if (entry.type != "Cell") continue;
-        
-        // Find the same record in BCOM (Based on data.grid), if it exists, update to BCOM parent deets
-        var matchingFromBcom = BcomGroundCover.Where(bce => bce.type == "Cell" 
-                                                            && bce.data.grid == entry.data.grid);
-
-        //Construct new cell with everything from bcom
-        newFile.Add(matchingFromBcom.Any() ? matchingFromBcom : entry);
-    }
-
-    foreach (var entry in BCOMGroundCover)
-    {
-        if (entry.type != "Cell") continue;
-       
-        // Find any matching cells in Vardenfell
-        var matchingFromVardenfell = vardenfell.Where(vf => vf.type == "Cell" 
-                                                            && vf.data.grid == entry.data.grid);
-
-        if (!matchingFromVardenfell.Any())
-        {
-            newFile.Add(entry);
-        }
-    }
-    
-    return newFile;
-}
 
 static IEnumerable<dynamic> ProcessBcomReferenceArrays(IEnumerable<dynamic> BCOMGroundCover, 
     IEnumerable<dynamic> vardenfell, 
@@ -159,159 +58,80 @@ static IEnumerable<dynamic> ProcessBcomReferenceArrays(IEnumerable<dynamic> BCOM
     var vardenfellEntryCount = vardenfell.Count();
     var bcomEntryCount = BCOMGroundCover.Count();
     var bcomCompletedCount = 0;
-    var mergedCopies = 0;
     
-    var countCompleted = 0;
 
-    var vardenfellReferences = CreateFlatDynamicList(vardenfell.Where(vf => vf.type == "Cell").Select(vf => vf.references));
-
-    foreach (var vardenfellParentEntry in vardenfell)
+    var vardenfellReferences = MergedGroundCover.CreateFlatDynamicList(vardenfell.Where(vf => vf.type.ToString() == "Cell").Select(vf => vf.references));
+    
+    foreach (var bcomParentEntry in BCOMGroundCover)
     {
-        Console.WriteLine($"Completed {countCompleted} out of {vardenfellEntryCount}");
+        Console.WriteLine($"{bcomCompletedCount} bcom parent entries completed out of {bcomEntryCount}");
         
-        if (vardenfellParentEntry.type != "Cell")
+        if (bcomParentEntry.type != "Cell")
         {
-            countCompleted++;
+            bcomCompletedCount++;
             continue;
         }
 
-        foreach (var bcomParentEntry in BCOMGroundCover)
+        foreach (var bcomReference in bcomParentEntry.references)
         {
-            Console.WriteLine($"{bcomCompletedCount} bcom parent entries completed out of {bcomEntryCount}");
-            
-            if (bcomParentEntry.type != "Cell")
+            if (bcomReference.mast_index == 0)
             {
-                bcomCompletedCount++;
+                mergedCopy = MergedGroundCover.AddReferenceToMergedFileBasedOnGrid(mergedCopy, bcomParentEntry.data.grid, bcomReference);
                 continue;
             }
-            
-            foreach (var vardenfellReference in vardenfellParentEntry.references)
+                
+            //match on master index from BCOM. MW = 1
+            if (bcomReference.mast_index == 1)
             {
-                foreach (var bcomReference in bcomParentEntry.references)
+                var matchingVFRE = vardenfellReferences.Where(vfr => vfr.refr_index == bcomReference.refr_index);
+                //check if the refr_index in BCOM Groundcover matches a cell reference subrecord in Vvardenfell Groundcover.
+                if (!matchingVFRE.Any())
                 {
-                    if (bcomReference.mast_index == 0)
+                    throw new Exception(
+                        $"ERROR: Unable to merge files: CELL reference refr_index [{bcomReference.refr_index}] is missing from vardenfell");
+                }
+
+                if (bcomReference.moved_cell != null)
+                {
+                    /*check what grid coordinates are entered after "moved cell". If grid coordinates match another CELL parent record in Vvardenfell Groundcover, 
+                    omit Vvardenfell Groundcover cell reference subrecord matched in steps 1b & 2b from merged file, and insert whole BCOM subrecord as-is to new CELL parent 
+                    subrecord in merged file */
+                    var matchingFromVardenfell = vardenfell.Where(vf => vf.type.ToString() == "Cell" 
+                                                                        && vf.data.grid == bcomReference.moved_cell);
+
+                    if (matchingFromVardenfell.Any())
                     {
-                        mergedCopies++;
-                        Console.WriteLine($"Merged {mergedCopies} copies.");
-                        mergedCopy = AddReferenceToMergedFileBasedOnGrid(mergedCopy, bcomParentEntry.data.grid, bcomReference);
+                        //Remove matching vardenfell reference 
+                        mergedCopy = MergedGroundCover.RemoveReferenceFromMergedFile(mergedCopy, matchingFromVardenfell);
+                        //Add BCOM refernec to parent reference array that matches moved_cell
+                        mergedCopy = MergedGroundCover.AddReferenceToMergedFileBasedOnGrid(mergedCopy, bcomReference.moved_cell, bcomReference);
                         continue;
                     }
+
+                    /*
+                      if "moved cell" grid coordinates do not match another CELL parent record in Vvardenfell Groundcover, locate corresponding grid coordinates in 'Cell Name Parent' 
+                      reference list and insert new CELL parent record. Then, omit Vvardenfell Groundcover cell reference subrecord matched in steps 1b & 2b from merged file, 
+                      and move whole BCOM subrecord as-is to new CELL parent subrecord in merged file.
+                     */
+                    var matchFromParentCellList = parentCellList.First(pcl => pcl.data.grid.ToString() == bcomReference.moved_cell.ToString());
+                    mergedCopy.Add(matchFromParentCellList);
+                        
+                    mergedCopy = MergedGroundCover.RemoveReferenceFromMergedFile(mergedCopy, matchingVFRE.First());
+                    mergedCopy = MergedGroundCover.AddReferenceToMergedFileBasedOnGrid(mergedCopy, bcomReference.moved_cell, bcomReference);
                     
-                    //match on master index from BCOM. MW = 1
-                    if (bcomReference.mast_index == 1)
-                    {
-                        //check if the refr_index in BCOM Groundcover matches a cell reference subrecord in Vvardenfell Groundcover.
-                        if (vardenfellReferences.Any(vfr => vfr.refr_index == bcomReference.refr_index))
-                        {
-                            throw new Exception(
-                                $"ERROR: Unable to merge files: CELL reference refr_index [{bcomReference.refr_index}] is missing from vardenfell");
-                        }
+                    continue;
+                }
 
-                        if (bcomReference.refr_index != vardenfellReference.refr_index) continue;
-
-                        if (bcomReference.moved_cell != null)
-                        {
-                            /*check what grid coordinates are entered after "moved cell". If grid coordinates match another CELL parent record in Vvardenfell Groundcover, 
-                            omit Vvardenfell Groundcover cell reference subrecord matched in steps 1b & 2b from merged file, and insert whole BCOM subrecord as-is to new CELL parent 
-                            subrecord in merged file */
-                            var matchingFromVardenfell = vardenfell.Where(vf => vf.type.ToString() == "Cell" 
-                                                                                && vf.data.grid == bcomReference.moved_cell);
-
-                            if (matchingFromVardenfell.Any())
-                            {
-                                //Remove matching vardenfell reference 
-                                mergedCopy = RemoveReferenceFromMergedFile(mergedCopy, vardenfellReference);
-                                //Add BCOM refernec to parent reference array that matches moved_cell
-                                mergedCopy = AddReferenceToMergedFileBasedOnGrid(mergedCopy, bcomReference.moved_cell, bcomReference);
-                                continue;
-                            }
-
-                            /*
-                              if "moved cell" grid coordinates do not match another CELL parent record in Vvardenfell Groundcover, locate corresponding grid coordinates in 'Cell Name Parent' 
-                              reference list and insert new CELL parent record. Then, omit Vvardenfell Groundcover cell reference subrecord matched in steps 1b & 2b from merged file, 
-                              and move whole BCOM subrecord as-is to new CELL parent subrecord in merged file.
-                             */
-                            var matchFromParentCellList = parentCellList.First(pcl => pcl.data.grid == bcomReference.moved_cell);
-                            mergedCopy.Add(matchFromParentCellList);
-                            
-                            mergedCopy = RemoveReferenceFromMergedFile(mergedCopy, vardenfellReference);
-                            mergedCopy = AddReferenceToMergedFileBasedOnGrid(mergedCopy, bcomReference.moved_cell, bcomReference);
-                        }
-                    }
+                if (bcomReference.deleted != null)
+                {
+                    mergedCopy = MergedGroundCover.RemoveReferenceFromMergedFile(mergedCopy, bcomReference);
                 }
             }
-            bcomCompletedCount++;
         }
 
-        countCompleted++;
+        bcomCompletedCount++;
     }
-    
     Console.WriteLine("Processing reference arrays complete.");
     return mergedCopy;
 }
 
-static List<dynamic> AddReferenceToMergedFileBasedOnGrid(IEnumerable<dynamic> mergedFile, dynamic gridToMatch, dynamic referenceToAdd)
-{
-    var copy = mergedFile.ToList();
-    foreach (var parentItem in copy)
-    {
-        if (parentItem.type != "Cell") continue;
-
-        if (gridToMatch != parentItem.data.grid) continue;
-
-        var refs = JArray.FromObject(parentItem.references);
-        refs.Add(referenceToAdd);
-        
-        parentItem.references = refs;
-        return copy;
-    }
-
-    return copy;
-}
-
-static List<dynamic> RemoveReferenceFromMergedFile(IEnumerable<dynamic> mergedFile, dynamic referenceToRemove)
-{
-    var copy = mergedFile.ToList();
-    
-    foreach (var parentItem in copy)
-    {
-        if (parentItem.type != "Cell") continue;
-
-        var referenceList = (List<dynamic>) parentItem.references.ToList();
-        var match = referenceList.Any(r => r.mast_index == referenceToRemove.mast_index
-                                           && r.refr_index == referenceToRemove.refr_index
-                                           && r.id == referenceToRemove.id
-                                           && r.temporary == referenceToRemove.temporary
-                                           && r.translation == referenceToRemove.translation
-                                           && r.rotation == referenceToRemove.rotation);
-
-        if (!match) continue;
-
-        var newReferenceList = new List<dynamic>();
-
-        foreach (var entry in parentItem.references)
-        {
-            if(entry.mast_index == referenceToRemove.mast_index
-               && entry.refr_index == referenceToRemove.refr_index
-               && entry.id == referenceToRemove.id
-               && entry.temporary == referenceToRemove.temporary
-               && entry.translation == referenceToRemove.translation
-               && entry.rotation == referenceToRemove.rotation) continue;
-            
-            newReferenceList.Add(entry);
-        }
-        parentItem.references = newReferenceList;
-    }
-    return copy;
-}
-
-static List<dynamic> CreateFlatDynamicList(IEnumerable<dynamic> listofLists)
-{
-    var flatList = new List<dynamic>();
-    
-    foreach (var list in listofLists)
-    {
-        flatList.AddRange(list);
-    }
-    return flatList;
-}

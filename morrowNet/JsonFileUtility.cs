@@ -16,11 +16,11 @@ public static class JsonFileUtils
         File.WriteAllText(fileName, deescaped);
     }
 
-    public static void BetterWrite(object jsonobject, string filepath)
+    public static dynamic ReadInFile(string filePath, string fileName)
     {
-        var options = new JsonSerializerOptions { WriteIndented = true };
-        string json = JsonSerializer.Serialize(jsonobject); 
-        
-        File.WriteAllText(filepath, json);
+        Console.WriteLine($"Reading in {fileName}...");
+        var streamReader = new StreamReader(filePath);
+        var fileStream = streamReader.ReadToEnd();
+        return JsonConvert.DeserializeObject(fileStream);
     }
 }
